@@ -17,7 +17,22 @@ import nilearn.plotting as plotting
 from nilearn import datasets
 from nilearn import surface
 
-def scd_effect_on_mf(mf_df, roi_ids):
+def euler_effect_on_mf(mf_df, roi_ids): 
+    euler_effect_mf_df = pd.DataFrame(index=roi_ids)
+    for roi in roi_ids:
+        fitmod = smf.ols("Q('{0}') ~ C(SEX) + age + euler_mean_bh".format(roi),
+                            data=mf_df).fit()
+        t = fitmod.tvalues[3]
+        p = fitmod.pvalues[3]
+        euler_effect_mf_df.loc[roi,'euler_p'] = p
+        euler_effect_mf_df.loc[roi,'euler_t'] = t
+    
+    fdrs = multipletests(euler_effect_mf_df['euler_p'].values,method='fdr_bh')
+    euler_effect_mf_df.loc[:,'euler_FDR'] = fdrs[1]
+    
+    return euler_effect_mf_df
+
+def scd_effect_on_mf(mf_df, roi_ids, include_euler=False):
     '''
     Given a sub x roi dataframe of morphometric features and several demographic variables, 
     this function computes the effect of sex chromosome dosage on the morphometric 
@@ -29,8 +44,12 @@ def scd_effect_on_mf(mf_df, roi_ids):
     '''
     scd_effect_mf_df = pd.DataFrame(index=roi_ids)
     for roi in roi_ids:
-        fitmod = smf.ols("Q('{0}') ~ C(SEX) + age + SCdose".format(roi),
-                         data=mf_df).fit()
+        if include_euler == True:
+            fitmod = smf.ols("Q('{0}') ~ C(SEX) + age + SCdose + euler_mean_bh".format(roi),
+                             data=mf_df).fit()
+        else:
+            fitmod = smf.ols("Q('{0}') ~ C(SEX) + age + SCdose".format(roi),
+                             data=mf_df).fit()
         t = fitmod.tvalues[3]
         p = fitmod.pvalues[3]
         scd_effect_mf_df.loc[roi,'SCdose_p'] = p
