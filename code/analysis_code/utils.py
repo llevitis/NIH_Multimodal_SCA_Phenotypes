@@ -45,13 +45,13 @@ def scd_effect_on_mf(mf_df, roi_ids, include_euler=False):
     scd_effect_mf_df = pd.DataFrame(index=roi_ids)
     for roi in roi_ids:
         if include_euler == True:
-            fitmod = smf.ols("Q('{0}') ~ C(SEX) + age + SCdose + euler_mean_bh".format(roi),
+            fitmod = smf.ols("Q('{0}') ~ age + SCdose + euler_mean_bh".format(roi),
                              data=mf_df).fit()
         else:
-            fitmod = smf.ols("Q('{0}') ~ C(SEX) + age + SCdose".format(roi),
+            fitmod = smf.ols("Q('{0}') ~ age + SCdose".format(roi),
                              data=mf_df).fit()
-        t = fitmod.tvalues[3]
-        p = fitmod.pvalues[3]
+        t = fitmod.tvalues[2]
+        p = fitmod.pvalues[2]
         scd_effect_mf_df.loc[roi,'SCdose_p'] = p
         scd_effect_mf_df.loc[roi,'SCdose_t'] = t
     
