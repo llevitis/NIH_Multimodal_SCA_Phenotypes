@@ -32,7 +32,7 @@ def euler_effect_on_mf(mf_df, roi_ids):
     
     return euler_effect_mf_df
 
-def scd_effect_on_mf(mf_df, roi_ids, include_euler=False):
+def scd_effect_on_mf(mf_df, roi_ids, include_euler=False, include_eTIV=False):
     '''
     Given a sub x roi dataframe of morphometric features and several demographic variables, 
     this function computes the effect of sex chromosome dosage on the morphometric 
@@ -44,8 +44,14 @@ def scd_effect_on_mf(mf_df, roi_ids, include_euler=False):
     '''
     scd_effect_mf_df = pd.DataFrame(index=roi_ids)
     for roi in roi_ids:
-        if include_euler == True:
+        if include_euler == True and include_eTIV == False:
             fitmod = smf.ols("Q('{0}') ~ age + SCdose + euler_mean_bh".format(roi),
+                             data=mf_df).fit()
+        elif include_euler == True and include_eTIV == True:
+            fitmod = smf.ols("Q('{0}') ~ age + SCdose + euler_mean_bh + eTIV.1".format(roi),
+                             data=mf_df).fit()
+        elif include_euler == False and include_eTIV == True:
+            fitmod = smf.ols("Q('{0}') ~ age + SCdose + eTIV.1".format(roi),
                              data=mf_df).fit()
         else:
             fitmod = smf.ols("Q('{0}') ~ age + SCdose".format(roi),
