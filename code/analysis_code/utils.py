@@ -48,10 +48,10 @@ def scd_effect_on_mf(mf_df, roi_ids, include_euler=False, include_eTIV=False):
             fitmod = smf.ols("Q('{0}') ~ age + SCdose + euler_mean_bh".format(roi),
                              data=mf_df).fit()
         elif include_euler == True and include_eTIV == True:
-            fitmod = smf.ols("Q('{0}') ~ age + SCdose + euler_mean_bh + eTIV.1".format(roi),
+            fitmod = smf.ols("Q('{0}') ~ age + SCdose + euler_mean_bh + eTIV".format(roi),
                              data=mf_df).fit()
         elif include_euler == False and include_eTIV == True:
-            fitmod = smf.ols("Q('{0}') ~ age + SCdose + eTIV.1".format(roi),
+            fitmod = smf.ols("Q('{0}') ~ age + SCdose + eTIV".format(roi),
                              data=mf_df).fit()
         else:
             fitmod = smf.ols("Q('{0}') ~ age + SCdose".format(roi),
@@ -92,7 +92,7 @@ def compute_rmap_b_mf(mf_norm_corr_matrix, scd_effect_mf_df, roi_ids):
         r_map_b_mf.append(r)
     return r_map_b_mf
         
-def compute_scd_effect_global_mf_coupling(mf_df, roi_ids):
+def compute_scd_effect_global_mf_coupling(mf_df, roi_ids, include_euler=True, include_eTIV=False):
     '''
     Given a sub x roi dataframe of morphometric features and several demographic 
     variables, this function first regresses out the effect of SC dosage, age, 
@@ -181,3 +181,31 @@ def plot_corr_matrix(corr_matrix_df, xlabel="308 Regions", ylabel="308 Regions",
     plt.xlabel(xlabel, fontsize=14)
     plt.yticks([])
     plt.ylabel(ylabel, fontsize=14)
+
+def create_scd_effect_images_dict(scd_effect_dict, features, rois, parc_data, parc_img):
+    '''
+    This function requires the effect of SCdose to be computed for a sub by ROI matrix corresponding 
+    to some feature (e.g. cortical thickness) of interest. For each feature the function 
+    creates a Nifti1 image where all the statistically significant ROIs and their corresponding t-values
+    are projected. This is saved as a dictionary of images indexed by feature name.
+    
+    scd_effect_dict -- a dictionary containing ROI by stat measure (t-val, FDR-val) matrices, 
+    each reflecting the effect of SCD on a feature of interest
+    features -- a list of all features included in scd_effect_dict
+    rois - a list of all ROIs
+    parc_data - Nifti1 image data for the parcellation scheme of interest
+    parc_img - Nifti1 image for the parcellation scheme of interest
+    '''
+    img_dict = {}
+    for feat in features: 
+        curr_map = np.zeros_like(parc_data)
+        for i,roi in enumerate(rois): 
+            if scd_effect_dict[mf].loc[roi, 'SCdose_FDR'] < 0.05:
+                t_val = scd_effect_dict[mf].loc[roi, 'SCdose_t'] 
+                curr_map[parc_data==(i+1)] = t_val
+        curr_img = nib.Nifti1Image(curr_map, 
+                                   affine=parc_img.affine, 
+                                   header=parc_img.header)
+        img_dict[feat] = curr_img
+    return img_dict
+
