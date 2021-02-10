@@ -32,7 +32,7 @@ def euler_effect_on_mf(mf_df, roi_ids):
     
     return euler_effect_mf_df
 
-def scd_effect_on_mf(mf_df, roi_ids, include_euler=False, include_eTIV=False):
+def scd_effect_on_mf(mf_df, roi_ids, include_euler=False, include_TTV=False):
     '''
     Given a sub x roi dataframe of morphometric features and several demographic variables, 
     this function computes the effect of sex chromosome dosage on the morphometric 
@@ -44,14 +44,14 @@ def scd_effect_on_mf(mf_df, roi_ids, include_euler=False, include_eTIV=False):
     '''
     scd_effect_mf_df = pd.DataFrame(index=roi_ids)
     for roi in roi_ids:
-        if include_euler == True and include_eTIV == False:
+        if include_euler == True and include_TTV == False:
             fitmod = smf.ols("Q('{0}') ~ age + SCdose + euler_mean_bh".format(roi),
                              data=mf_df).fit()
-        elif include_euler == True and include_eTIV == True:
-            fitmod = smf.ols("Q('{0}') ~ age + SCdose + euler_mean_bh + eTIV".format(roi),
+        elif include_euler == True and include_TTV == True:
+            fitmod = smf.ols("Q('{0}') ~ age + SCdose + euler_mean_bh + TTV".format(roi),
                              data=mf_df).fit()
-        elif include_euler == False and include_eTIV == True:
-            fitmod = smf.ols("Q('{0}') ~ age + SCdose + eTIV".format(roi),
+        elif include_euler == False and include_TTV == True:
+            fitmod = smf.ols("Q('{0}') ~ age + SCdose + TTV".format(roi),
                              data=mf_df).fit()
         else:
             fitmod = smf.ols("Q('{0}') ~ age + SCdose".format(roi),
@@ -91,8 +91,22 @@ def compute_rmap_b_mf(mf_norm_corr_matrix, scd_effect_mf_df, roi_ids):
         r,p = stats.pearsonr(mf_norm_corr_matrix[roi], scd_effect_mf_df['SCdose_t'])
         r_map_b_mf.append(r)
     return r_map_b_mf
+
+def compute_scd_effect_mf_resid(mf_df, roi_ids, include_euler=True, include_TTV=False):
+    resid_df = pd.DataFrame(index=mf_df.index, columns=roi_ids)
+    for roi in roi_ids:
+        if include_TTV == False:
+            fitmod = smf.ols("Q('{0}') ~ age + SCdose + euler_mean_bh".format(roi),
+                            data=mf_df).fit()
+        elif include_TTV == True:
+            fitmod = smf.ols("Q('{0}') ~ age + SCdose + euler_mean_bh + TTV".format(roi),
+                            data=mf_df).fit()
+        resid_df.loc[:,roi] = fitmod.resid
+    return resid_df
         
-def compute_scd_effect_global_mf_coupling(mf_df, roi_ids, include_euler=True, include_eTIV=False):
+#def compute_covariance_delta
+
+def compute_scd_effect_global_mf_coupling(mf_df, roi_ids, include_euler=True):
     '''
     Given a sub x roi dataframe of morphometric features and several demographic 
     variables, this function first regresses out the effect of SC dosage, age, 
@@ -107,11 +121,11 @@ def compute_scd_effect_global_mf_coupling(mf_df, roi_ids, include_euler=True, in
     '''
     mf_norm_age_scd_resid_df = pd.DataFrame(index=mf_df.index, columns=roi_ids)
     for roi in roi_ids:
-        fitmod = smf.ols("Q('{0}') ~ age + SCdose + age * SCdose".format(roi),
+        fitmod = smf.ols("Q('{0}') ~ age + SCdose + euler_mean_bh + age * SCdose".format(roi),
                          data=mf_df).fit()
         mf_norm_age_scd_resid_df.loc[:,roi] = fitmod.resid
         
-    for var in ['age', 'SEX', 'SCdose']: 
+    for var in ['age', 'SCdose']: 
         mf_norm_age_scd_resid_df[var] = mf_df[var]
         
     for sub in mf_norm_age_scd_resid_df.index: 
@@ -175,7 +189,7 @@ def create_surf_stat_img(stat_data, parc308_img):
     
 def plot_corr_matrix(corr_matrix_df, xlabel="308 Regions", ylabel="308 Regions", title="Coupling Change Matrix", cmap="RdBu_r"):
     plt.figure(figsize=(6,5))
-    sns.heatmap(np.array(corr_matrix_df), cmap=cmap, vmax=4, vmin=-4)
+    sns.heatmap(np.array(corr_matrix_df), cmap=cmap)
     plt.title(title, fontsize=14)
     plt.xticks([])
     plt.xlabel(xlabel, fontsize=14)
@@ -208,4 +222,62 @@ def create_scd_effect_images_dict(scd_effect_dict, features, rois, parc_data, pa
                                    header=parc_img.header)
         img_dict[feat] = curr_img
     return img_dict
+
+def grad2vols(gradients, atlas, labels, image_dim='4D'):
+    """
+    Takes computed gradient(s) from fitted GradientMaps object and converts them
+    to 3D image(s) in volume format based on the atlas utilized in the GradientMaps
+    object. The output can either be one 4D image where 3D gradients are concatenated
+    or a list of 3D images, one per gradient.
+    ----------
+    gradients: array_like
+        Fitted GradientMaps object.
+    atlas_filename: path or Nifti1Image
+        Parcellation utilized within the computation of gradients, that is fmrivols2conn.
+        Either name of the corresponding parcellation dataset or loaded dataset.
+        Uses nilearn.datasets interface to fetch parcellation datasets and their information.
+    labels: list of parcellation labels
+    image_dim: str
+        Image dimensions of the Nifti1Image output. Either one 4D image where gradient
+        maps are concatenated along the 4th dimension ('4D') or a list of 3D images, one per
+        gradient ('3D'). Default is '4D'.
+    Returns
+    -------
+    gradient_maps_vol: Nifti1Image
+       4D image with gradient maps concatenated along the 4th dimension or list of 3D images, one
+       per gradient.
+    """
+
+    #check if atlas_filename is str and thus should be loaded
+    if isinstance(atlas, str):
+        atlas_filename = eval('datasets.fetch_%s()' %atlas).maps
+        atlas_img = nib.load(atlas_filename)
+        atlas_data = atlas_img.get_fdata()
+        labels = eval('datasets.fetch_%s()' %atlas).labels
+    else:
+    #read and define atlas data, affine and header
+        atlas_img = atlas
+        atlas_data = atlas.get_fdata()
+        labels = labels
+
+    gradient_list = []
+    gradient_vols = []
+
+    for gradient in range(gradients.n_components):
+
+        gradient_list.append(np.zeros_like(atlas_data))
+
+    for i, g in enumerate(gradient_list):
+        for j in range(0, len(labels)):
+            g[atlas_data == (j + 1)] = gradients.gradients_.T[i][j]
+        gradient_vols.append(nib.Nifti1Image(g, atlas_img.affine, atlas_img.header))
+
+    if image_dim is None or image_dim=='4D':
+        gradient_vols = nib.concat_images(gradient_vols)
+        print('Gradient maps will be concatenated within one 4D image.')
+    elif image_dim=='3D':
+        print('Gradient maps will be provided as a list of 3D images, one per gradient.')
+
+    return gradient_vols
+
 
