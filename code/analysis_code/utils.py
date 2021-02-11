@@ -12,6 +12,9 @@ from scipy import stats
 import statsmodels.formula.api as smf
 from statsmodels.sandbox.stats.multicomp import multipletests
 
+from sklearn.preprocessing import MinMaxScaler
+
+
 import nibabel as nib 
 import nilearn.plotting as plotting
 from nilearn import datasets
@@ -38,11 +41,11 @@ def cohend(d1, d2):
 	# calculate the size of samples
 	n1, n2 = len(d1), len(d2)
 	# calculate the variance of the samples
-	s1, s2 = var(d1, ddof=1), var(d2, ddof=1)
+	s1, s2 = np.var(d1, ddof=1), np.var(d2, ddof=1)
 	# calculate the pooled standard deviation
-	s = sqrt(((n1 - 1) * s1 + (n2 - 1) * s2) / (n1 + n2 - 2))
+	s = np.sqrt(((n1 - 1) * s1 + (n2 - 1) * s2) / (n1 + n2 - 2))
 	# calculate the means of the samples
-	u1, u2 = mean(d1), mean(d2)
+	u1, u2 = np.mean(d1), np.mean(d2)
 	# calculate the effect size
 	return (u1 - u2) / s
 
@@ -55,13 +58,21 @@ def scd_effect_on_mf_cohen_d(mf_df, roi_ids, include_euler=False, include_TTV=Fa
     mf_df -- a sub x roi dataframe
     roi_ids -- a list of labels corresponding to the ROI columns in mf_df
     '''
-    scd_effect_mf_df = pd.DataFrame(index=roi_ids, columns='Cohen_d')
-    resid_df = compute_scd_effect_mf_resid(mf_df, roi_ids, include_euler=include_euler, 
-                                           include_TTV=include_TTV)
+    scd_effect_mf_df = pd.DataFrame(index=roi_ids, columns=['Cohen_d'])
+    resid_df = pd.DataFrame(index=mf_df.index, columns=roi_ids)
+    for roi in roi_ids:
+        if include_TTV == False:
+            fitmod = smf.ols("Q('{0}') ~ age + euler_mean_bh".format(roi),
+                            data=mf_df).fit()
+        elif include_TTV == True:
+            fitmod = smf.ols("Q('{0}') ~ age + euler_mean_bh + TTV".format(roi),
+                            data=mf_df).fit()
+        resid_df.loc[:,roi] = fitmod.resid
     resid_df['SCdose'] = mf_df['SCdose']
     for roi in roi_ids:
         roi_cohend = cohend(resid_df[resid_df.SCdose==0][roi], resid_df[resid_df.SCdose==1][roi])
         scd_effect_mf_df.loc[roi, 'Cohen_d'] = roi_cohend
+    return scd_effect_mf_df
 
 def scd_effect_on_mf(mf_df, roi_ids, include_euler=False, include_TTV=False):
     '''
