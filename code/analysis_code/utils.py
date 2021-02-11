@@ -32,6 +32,37 @@ def euler_effect_on_mf(mf_df, roi_ids):
     
     return euler_effect_mf_df
 
+
+# function to calculate Cohen's d for independent samples
+def cohend(d1, d2):
+	# calculate the size of samples
+	n1, n2 = len(d1), len(d2)
+	# calculate the variance of the samples
+	s1, s2 = var(d1, ddof=1), var(d2, ddof=1)
+	# calculate the pooled standard deviation
+	s = sqrt(((n1 - 1) * s1 + (n2 - 1) * s2) / (n1 + n2 - 2))
+	# calculate the means of the samples
+	u1, u2 = mean(d1), mean(d2)
+	# calculate the effect size
+	return (u1 - u2) / s
+
+def scd_effect_on_mf_cohen_d(mf_df, roi_ids, include_euler=False, include_TTV=False):
+    '''
+    Given a sub x roi dataframe of morphometric features and several demographic variables, 
+    this function computes the standardized mean differences(Cohen's d) between cases and controls 
+    across ROIs after regressing out the covariates. 
+    
+    mf_df -- a sub x roi dataframe
+    roi_ids -- a list of labels corresponding to the ROI columns in mf_df
+    '''
+    scd_effect_mf_df = pd.DataFrame(index=roi_ids, columns='Cohen_d')
+    resid_df = compute_scd_effect_mf_resid(mf_df, roi_ids, include_euler=include_euler, 
+                                           include_TTV=include_TTV)
+    resid_df['SCdose'] = mf_df['SCdose']
+    for roi in roi_ids:
+        roi_cohend = cohend(resid_df[resid_df.SCdose==0][roi], resid_df[resid_df.SCdose==1][roi])
+        scd_effect_mf_df.loc[roi, 'Cohen_d'] = roi_cohend
+
 def scd_effect_on_mf(mf_df, roi_ids, include_euler=False, include_TTV=False):
     '''
     Given a sub x roi dataframe of morphometric features and several demographic variables, 
@@ -76,10 +107,10 @@ def compute_mf_norm_corr_matrix(mf_df, roi_ids):
     mf_df -- a sub x roi dataframe
     roi_ids -- a list of labels corresponding to the ROI columns in mf_df
     '''
-    mf_norm_sex_age_residuals = pd.DataFrame(index=mf_df[mf_df.SCdose==2].index, columns=roi_ids)
+    mf_norm_sex_age_residuals = pd.DataFrame(index=mf_df[mf_df.SCdose==0].index, columns=roi_ids)
     for roi in roi_ids:
         fitmod = smf.ols("Q('{0}') ~ C(SEX) + age + C(SEX) * age".format(roi),
-                         data=mf_df[mf_df.SCdose==2]).fit()
+                         data=mf_df[mf_df.SCdose==0]).fit()
         mf_norm_sex_age_residuals.loc[:,roi] = fitmod.resid
         
     mf_norm_corr_matrix = mf_norm_sex_age_residuals.corr() # rmap_a
