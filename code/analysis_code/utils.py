@@ -70,7 +70,7 @@ def scd_effect_on_mf_cohen_d(mf_df, roi_ids, include_euler=False, include_TTV=Fa
         resid_df.loc[:,roi] = fitmod.resid
     resid_df['SCdose'] = mf_df['SCdose']
     for roi in roi_ids:
-        roi_cohend = cohend(resid_df[resid_df.SCdose==0][roi], resid_df[resid_df.SCdose==1][roi])
+        roi_cohend = cohend(resid_df[resid_df.SCdose==1][roi], resid_df[resid_df.SCdose==0][roi])
         scd_effect_mf_df.loc[roi, 'Cohen_d'] = roi_cohend
     return scd_effect_mf_df
 
